@@ -21,8 +21,8 @@ services:
         mage start
         tail -f /dev/null
     ports:
-      - "127.0.0.1:10008:10008"
-      - "127.0.0.1:10009:10009"
+      - "10008:10008"
+      - "10009:10009"
     volumes:
       - "./config:/openim-chat/config:ro"
       - "../../start-config.yml:/openim-chat/start-config.yml:ro"
