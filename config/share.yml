@@ -1,0 +1,13 @@
+openIM:
+  # OpenIM API address
+  apiURL: http://127.0.0.1:10002
+  # OpenIM secret key, must be consistent with OpenIM
+  secret: openIM123
+  # OpenIM administrator userID, must be consistent with OpenIM
+  adminUserID: imAdmin
+  # Refresh OpenIM token interval
+  tokenRefreshInterval: 120  # unit: minute
+
+chatAdmin:
+   # Default username and password for the admin
+  - "chatAdmin"

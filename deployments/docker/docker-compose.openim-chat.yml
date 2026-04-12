@@ -1,0 +1,44 @@
+services:
+  openim-chat:
+    image: local/openim-chat:dev
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: openim-chat
+    restart: always
+    entrypoint:
+      - bash
+      - -c
+      - |
+        for target in mongo:27017 redis:6379 etcd:2379 openim-server:10002; do
+          host="$${target%%:*}"
+          port="$${target##*:}"
+          until </dev/tcp/$$host/$$port; do
+            echo "Waiting for $$target ..."
+            sleep 2
+          done
+        done
+        mage start
+        tail -f /dev/null
+    ports:
+      - "127.0.0.1:10008:10008"
+      - "127.0.0.1:10009:10009"
+    volumes:
+      - "./config:/openim-chat/config:ro"
+      - "../../start-config.yml:/openim-chat/start-config.yml:ro"
+      - "./logs:/openim-chat/_output/logs"
+    environment:
+      TZ: Asia/Shanghai
+    healthcheck:
+      test: ["CMD-SHELL", "mage check >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - openim
+
+networks:
+  openim:
+    external: true
+    name: docker_openim

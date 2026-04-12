@@ -1,0 +1,14 @@
+enable: "etcd"
+etcd:
+  rootDirectory: openim
+  address: [ localhost:12379 ]
+  username: ''
+  password: ''
+
+kubernetes:
+  namespace: default
+
+rpcService:
+  chat: chat-rpc-service
+  admin: admin-rpc-service
+  bot: bot-rpc-service
