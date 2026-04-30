@@ -67,6 +67,23 @@ func (x *SearchDefaultFriendReq) Check() error {
 	return nil
 }
 
+func (x *SetPlatformOperatorReq) Check() error {
+	if x.UserID == "" {
+		return errs.ErrArgs.WrapMsg("userID is empty")
+	}
+	return nil
+}
+
+func (x *FindPlatformOperatorReq) Check() error {
+	if x.UserIDs == nil {
+		return errs.ErrArgs.WrapMsg("userIDs is empty")
+	}
+	if datautil.Duplicate(x.UserIDs) {
+		return errs.ErrArgs.WrapMsg("userIDs has duplicate")
+	}
+	return nil
+}
+
 func (x *AddDefaultGroupReq) Check() error {
 	if x.GroupIDs == nil {
 		return errs.ErrArgs.WrapMsg("GroupIDs is empty")

@@ -10,4 +10,4 @@ openIM:
 
 chatAdmin:
    # Default username and password for the admin
-  - "chatAdmin"
+  - "admin"

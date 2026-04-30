@@ -61,6 +61,9 @@ type AdminDatabaseInterface interface {
 	AddDefaultFriend(ctx context.Context, ms []*admindb.RegisterAddFriend) error
 	DelDefaultFriend(ctx context.Context, userIDs []string) error
 	SearchDefaultFriend(ctx context.Context, keyword string, pagination pagination.Pagination) (int64, []*admindb.RegisterAddFriend, error)
+	FindPlatformOperator(ctx context.Context, userIDs []string) ([]string, error)
+	AddPlatformOperator(ctx context.Context, operators []*admindb.PlatformOperator) error
+	DelPlatformOperator(ctx context.Context, userIDs []string) error
 	FindDefaultGroup(ctx context.Context, groupIDs []string) ([]string, error)
 	AddDefaultGroup(ctx context.Context, ms []*admindb.RegisterAddGroup) error
 	DelDefaultGroup(ctx context.Context, groupIDs []string) error
@@ -111,6 +114,10 @@ func NewAdminDatabase(cli *mongoutil.Client, rdb redis.UniversalClient) (AdminDa
 	if err != nil {
 		return nil, err
 	}
+	platformOperator, err := admin.NewPlatformOperator(cli.GetDB())
+	if err != nil {
+		return nil, err
+	}
 	registerAddGroup, err := admin.NewRegisterAddGroup(cli.GetDB())
 	if err != nil {
 		return nil, err
@@ -135,6 +142,7 @@ func NewAdminDatabase(cli *mongoutil.Client, rdb redis.UniversalClient) (AdminDa
 		limitUserLoginIP:   limitUserLoginIP,
 		invitationRegister: invitationRegister,
 		registerAddFriend:  registerAddFriend,
+		platformOperator:   platformOperator,
 		registerAddGroup:   registerAddGroup,
 		applet:             applet,
 		clientConfig:       clientConfig,
@@ -151,6 +159,7 @@ type AdminDatabase struct {
 	limitUserLoginIP   admindb.LimitUserLoginIPInterface
 	invitationRegister admindb.InvitationRegisterInterface
 	registerAddFriend  admindb.RegisterAddFriendInterface
+	platformOperator   admindb.PlatformOperatorInterface
 	registerAddGroup   admindb.RegisterAddGroupInterface
 	applet             admindb.AppletInterface
 	clientConfig       admindb.ClientConfigInterface
@@ -276,6 +285,18 @@ func (o *AdminDatabase) DelDefaultFriend(ctx context.Context, userIDs []string) 
 
 func (o *AdminDatabase) SearchDefaultFriend(ctx context.Context, keyword string, pagination pagination.Pagination) (int64, []*admindb.RegisterAddFriend, error) {
 	return o.registerAddFriend.Search(ctx, keyword, pagination)
+}
+
+func (o *AdminDatabase) FindPlatformOperator(ctx context.Context, userIDs []string) ([]string, error) {
+	return o.platformOperator.FindUserIDs(ctx, userIDs)
+}
+
+func (o *AdminDatabase) AddPlatformOperator(ctx context.Context, operators []*admindb.PlatformOperator) error {
+	return o.platformOperator.Add(ctx, operators)
+}
+
+func (o *AdminDatabase) DelPlatformOperator(ctx context.Context, userIDs []string) error {
+	return o.platformOperator.Del(ctx, userIDs)
 }
 
 func (o *AdminDatabase) FindDefaultGroup(ctx context.Context, groupIDs []string) ([]string, error) {

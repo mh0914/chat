@@ -15,12 +15,15 @@
 package chat
 
 import (
+	"encoding/json"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/openimsdk/chat/internal/api/util"
 
 	"github.com/gin-gonic/gin"
+	"github.com/openimsdk/chat/pkg/botstruct"
 	"github.com/openimsdk/chat/pkg/common/apistruct"
 	"github.com/openimsdk/chat/pkg/common/imapi"
 	"github.com/openimsdk/chat/pkg/common/mctx"
@@ -32,7 +35,18 @@ import (
 	"github.com/openimsdk/tools/apiresp"
 	"github.com/openimsdk/tools/errs"
 	"github.com/openimsdk/tools/log"
+	"github.com/openimsdk/tools/utils/datautil"
 )
+
+const smartCustomerServiceConfigKey = "smart_customer_service_user_ids"
+
+type findSmartCustomerServiceReq struct {
+	UserIDs []string `json:"userIDs"`
+}
+
+type findSmartCustomerServiceResp struct {
+	UserIDs []string `json:"userIDs"`
+}
 
 func New(chatClient chatpb.ChatClient, adminClient admin.AdminClient, imApiCaller imapi.CallerInterface, api *util.Api) *Api {
 	return &Api{
@@ -271,6 +285,45 @@ func (o *Api) FindUserFullInfo(c *gin.Context) {
 	a2r.Call(c, chatpb.ChatClient.FindUserFullInfo, o.chatClient)
 }
 
+func (o *Api) FindPlatformOperator(c *gin.Context) {
+	a2r.Call(c, admin.AdminClient.FindPlatformOperator, o.adminClient)
+}
+
+func (o *Api) FindSmartCustomerService(c *gin.Context) {
+	req, err := a2r.ParseRequest[findSmartCustomerServiceReq](c)
+	if err != nil {
+		apiresp.GinError(c, err)
+		return
+	}
+	resp, err := o.adminClient.GetClientConfig(c, &admin.GetClientConfigReq{})
+	if err != nil {
+		apiresp.GinError(c, err)
+		return
+	}
+	raw := strings.TrimSpace(resp.Config[smartCustomerServiceConfigKey])
+	if raw == "" {
+		apiresp.GinSuccess(c, &findSmartCustomerServiceResp{})
+		return
+	}
+	var smartUserIDs []string
+	if err := json.Unmarshal([]byte(raw), &smartUserIDs); err != nil {
+		apiresp.GinError(c, errs.WrapMsg(err, "parse smart customer service config failed"))
+		return
+	}
+	if len(req.UserIDs) > 0 {
+		filterSet := datautil.SliceSetAny(req.UserIDs, func(userID string) string {
+			return userID
+		})
+		smartUserIDs = datautil.Slice(smartUserIDs, func(userID string) string {
+			if _, ok := filterSet[userID]; ok {
+				return userID
+			}
+			return ""
+		})
+	}
+	apiresp.GinSuccess(c, &findSmartCustomerServiceResp{UserIDs: datautil.Distinct(smartUserIDs)})
+}
+
 func (o *Api) SearchUserFullInfo(c *gin.Context) {
 	a2r.Call(c, chatpb.ChatClient.SearchUserFullInfo, o.chatClient)
 }
@@ -302,6 +355,17 @@ func (o *Api) OpenIMCallback(c *gin.Context) {
 	if err != nil {
 		apiresp.GinError(c, err)
 		return
+	}
+	if c.Query(constantpb.CallbackCommand) == openIMCallbackAfterSendSingleMsg {
+		handled, err := o.handleSmartCustomerServiceSingleMsg(c, string(body), c.Query(botstruct.Key))
+		if err != nil {
+			apiresp.GinError(c, err)
+			return
+		}
+		if handled {
+			apiresp.GinSuccess(c, nil)
+			return
+		}
 	}
 	req := &chatpb.OpenIMCallbackReq{
 		Command: c.Query(constantpb.CallbackCommand),

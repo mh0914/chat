@@ -65,6 +65,10 @@ func (o *ChatClient) FindUserFullInfo(ctx context.Context, userIDs []string) ([]
 	return resp.Users, nil
 }
 
+func (o *ChatClient) SearchUserFullInfo(ctx context.Context, req *chat.SearchUserFullInfoReq) (*chat.SearchUserFullInfoResp, error) {
+	return o.client.SearchUserFullInfo(ctx, req)
+}
+
 func (o *ChatClient) MapUserFullInfo(ctx context.Context, userIDs []string) (map[string]*common.UserFullInfo, error) {
 	users, err := o.FindUserFullInfo(ctx, userIDs)
 	if err != nil {

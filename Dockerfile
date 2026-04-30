@@ -32,7 +32,8 @@ RUN apk add --no-cache bash
 
 # Set the environment and work directory
 ENV SERVER_DIR=/openim-chat
-ENV GOPROXY=https://goproxy.cn,direct
+ENV GOPROXY=off
+ENV GOSUMDB=off
 ENV PATH=/usr/local/go/bin:$PATH
 WORKDIR $SERVER_DIR
 
@@ -40,6 +41,7 @@ WORKDIR $SERVER_DIR
 # Copy the compiled binaries and mage from the builder image to the final image
 COPY --from=builder $SERVER_DIR/_output $SERVER_DIR/_output
 COPY --from=builder $SERVER_DIR/config $SERVER_DIR/config
+COPY --from=builder /go/pkg /go/pkg
 COPY --from=builder /go/bin/mage /usr/local/bin/mage
 COPY --from=builder $SERVER_DIR/magefile_windows.go $SERVER_DIR/
 COPY --from=builder $SERVER_DIR/magefile_unix.go $SERVER_DIR/
@@ -47,8 +49,6 @@ COPY --from=builder $SERVER_DIR/magefile.go $SERVER_DIR/
 COPY --from=builder $SERVER_DIR/start-config.yml $SERVER_DIR/
 COPY --from=builder $SERVER_DIR/go.mod $SERVER_DIR/
 COPY --from=builder $SERVER_DIR/go.sum $SERVER_DIR/
-
-RUN go mod download
 
 # Set the command to run when the container starts
 ENTRYPOINT ["sh", "-c", "mage start && tail -f /dev/null"]

@@ -36,3 +36,22 @@ type NewUserCountResp struct {
 	Total     int64            `json:"total"`
 	DateCount map[string]int64 `json:"date_count"`
 }
+
+type PlatformOperatorUser struct {
+	UserID                 string `json:"userID"`
+	Account                string `json:"account"`
+	PhoneNumber            string `json:"phoneNumber"`
+	AreaCode               string `json:"areaCode"`
+	Email                  string `json:"email"`
+	Nickname               string `json:"nickname"`
+	FaceURL                string `json:"faceURL"`
+	Gender                 int32  `json:"gender"`
+	Level                  int32  `json:"level"`
+	IsPlatformOperator     bool   `json:"isPlatformOperator"`
+	IsSmartCustomerService bool   `json:"isSmartCustomerService"`
+}
+
+type SearchPlatformOperatorUsersResp struct {
+	Total uint32                  `json:"total"`
+	Users []*PlatformOperatorUser `json:"users"`
+}

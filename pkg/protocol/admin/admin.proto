@@ -123,6 +123,21 @@ message SearchDefaultFriendResp {
   repeated DefaultFriendAttribute users = 2;
 }
 
+message SetPlatformOperatorReq {
+  string userID = 1;
+  bool isPlatformOperator = 2;
+}
+
+message SetPlatformOperatorResp {}
+
+message FindPlatformOperatorReq {
+  repeated string userIDs = 1;
+}
+
+message FindPlatformOperatorResp {
+  repeated string userIDs = 1;
+}
+
 // ################### DefaultGroup ###################
 
 message AddDefaultGroupReq {
@@ -559,6 +574,8 @@ service admin {
   rpc DelDefaultFriend(DelDefaultFriendReq) returns (DelDefaultFriendResp);
   rpc FindDefaultFriend(FindDefaultFriendReq) returns (FindDefaultFriendResp);
   rpc SearchDefaultFriend(SearchDefaultFriendReq) returns (SearchDefaultFriendResp);
+  rpc SetPlatformOperator(SetPlatformOperatorReq) returns (SetPlatformOperatorResp);
+  rpc FindPlatformOperator(FindPlatformOperatorReq) returns (FindPlatformOperatorResp);
 
   rpc AddDefaultGroup(AddDefaultGroupReq) returns (AddDefaultGroupResp);
   rpc DelDefaultGroup(DelDefaultGroupReq) returns (DelDefaultGroupResp);

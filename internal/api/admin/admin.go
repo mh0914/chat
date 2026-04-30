@@ -3,6 +3,7 @@ package admin
 import (
 	"context"
 	"crypto/md5"
+	"encoding/json"
 	"encoding/hex"
 	"net/http"
 	"strconv"
@@ -13,12 +14,14 @@ import (
 	"github.com/openimsdk/chat/internal/api/util"
 	"github.com/openimsdk/chat/pkg/common/apistruct"
 	"github.com/openimsdk/chat/pkg/common/config"
+	chatconstant "github.com/openimsdk/chat/pkg/common/constant"
 	"github.com/openimsdk/chat/pkg/common/imapi"
 	"github.com/openimsdk/chat/pkg/common/mctx"
 	"github.com/openimsdk/chat/pkg/common/xlsx"
 	"github.com/openimsdk/chat/pkg/common/xlsx/model"
 	"github.com/openimsdk/chat/pkg/protocol/admin"
 	"github.com/openimsdk/chat/pkg/protocol/chat"
+	"github.com/openimsdk/chat/pkg/protocol/common"
 	"github.com/openimsdk/protocol/constant"
 	"github.com/openimsdk/protocol/sdkws"
 	"github.com/openimsdk/protocol/user"
@@ -29,6 +32,24 @@ import (
 	"github.com/openimsdk/tools/utils/datautil"
 	"github.com/openimsdk/tools/utils/encrypt"
 )
+
+const (
+	smartCustomerServiceConfigKey = "smart_customer_service_user_ids"
+	adminUserBatchSize            = int32(500)
+)
+
+type setSmartCustomerServiceReq struct {
+	UserID                 string `json:"userID"`
+	IsSmartCustomerService bool   `json:"isSmartCustomerService"`
+}
+
+type findSmartCustomerServiceReq struct {
+	UserIDs []string `json:"userIDs"`
+}
+
+type findSmartCustomerServiceResp struct {
+	UserIDs []string `json:"userIDs"`
+}
 
 func New(chatClient chat.ChatClient, adminClient admin.AdminClient, imApiCaller imapi.CallerInterface, api *util.Api) *Api {
 	return &Api{
@@ -189,6 +210,257 @@ func (o *Api) SearchDefaultFriend(c *gin.Context) {
 
 func (o *Api) FindDefaultFriend(c *gin.Context) {
 	a2r.Call(c, admin.AdminClient.FindDefaultFriend, o.adminClient)
+}
+
+func (o *Api) FindPlatformOperator(c *gin.Context) {
+	a2r.Call(c, admin.AdminClient.FindPlatformOperator, o.adminClient)
+}
+
+func (o *Api) SetPlatformOperator(c *gin.Context) {
+	a2r.Call(c, admin.AdminClient.SetPlatformOperator, o.adminClient)
+}
+
+func (o *Api) SearchPlatformOperatorUsers(c *gin.Context) {
+	req, err := a2r.ParseRequest[chat.SearchUserFullInfoReq](c)
+	if err != nil {
+		apiresp.GinError(c, err)
+		return
+	}
+	if req.Pagination == nil {
+		req.Pagination = &sdkws.RequestPagination{
+			PageNumber: 1,
+			ShowNumber: 20,
+		}
+	}
+	req.Normal = chatconstant.FinDAllUser
+	resp, err := o.chatClient.SearchUserFullInfo(c, req)
+	if err != nil {
+		apiresp.GinError(c, err)
+		return
+	}
+
+	userIDs := datautil.Slice(resp.Users, func(user *common.UserFullInfo) string {
+		return user.UserID
+	})
+	operatorResp, err := o.adminClient.FindPlatformOperator(c, &admin.FindPlatformOperatorReq{
+		UserIDs: userIDs,
+	})
+	if err != nil {
+		apiresp.GinError(c, err)
+		return
+	}
+	operatorSet := datautil.SliceSetAny(operatorResp.UserIDs, func(userID string) string {
+		return userID
+	})
+	customerServiceIDs, err := o.getSmartCustomerServiceUserIDs(c)
+	if err != nil {
+		apiresp.GinError(c, err)
+		return
+	}
+	customerServiceSet := datautil.SliceSetAny(customerServiceIDs, func(userID string) string {
+		return userID
+	})
+
+	users := make([]*apistruct.PlatformOperatorUser, 0, len(resp.Users))
+	for _, user := range resp.Users {
+		_, isOperator := operatorSet[user.UserID]
+		_, isSmartCustomerService := customerServiceSet[user.UserID]
+		users = append(users, &apistruct.PlatformOperatorUser{
+			UserID:                 user.UserID,
+			Account:                user.Account,
+			PhoneNumber:            user.PhoneNumber,
+			AreaCode:               user.AreaCode,
+			Email:                  user.Email,
+			Nickname:               user.Nickname,
+			FaceURL:                user.FaceURL,
+			Gender:                 user.Gender,
+			Level:                  user.Level,
+			IsPlatformOperator:     isOperator,
+			IsSmartCustomerService: isSmartCustomerService,
+		})
+	}
+
+	apiresp.GinSuccess(c, &apistruct.SearchPlatformOperatorUsersResp{
+		Total: resp.Total,
+		Users: users,
+	})
+}
+
+func (o *Api) FindSmartCustomerService(c *gin.Context) {
+	req, err := a2r.ParseRequest[findSmartCustomerServiceReq](c)
+	if err != nil {
+		apiresp.GinError(c, err)
+		return
+	}
+	userIDs, err := o.getSmartCustomerServiceUserIDs(c)
+	if err != nil {
+		apiresp.GinError(c, err)
+		return
+	}
+	if len(req.UserIDs) > 0 {
+		filterSet := datautil.SliceSetAny(req.UserIDs, func(userID string) string {
+			return userID
+		})
+		userIDs = datautil.Slice(userIDs, func(userID string) string {
+			if _, ok := filterSet[userID]; ok {
+				return userID
+			}
+			return ""
+		})
+	}
+	apiresp.GinSuccess(c, &findSmartCustomerServiceResp{UserIDs: datautil.Distinct(userIDs)})
+}
+
+func (o *Api) SetSmartCustomerService(c *gin.Context) {
+	req, err := a2r.ParseRequest[setSmartCustomerServiceReq](c)
+	if err != nil {
+		apiresp.GinError(c, err)
+		return
+	}
+	req.UserID = strings.TrimSpace(req.UserID)
+	if req.UserID == "" {
+		apiresp.GinError(c, errs.ErrArgs.WrapMsg("userID is empty"))
+		return
+	}
+
+	userIDs, err := o.getSmartCustomerServiceUserIDs(c)
+	if err != nil {
+		apiresp.GinError(c, err)
+		return
+	}
+	userSet := datautil.SliceSetAny(userIDs, func(userID string) string {
+		return userID
+	})
+
+	if req.IsSmartCustomerService {
+		userSet[req.UserID] = struct{}{}
+		if err := o.ensureDefaultFriend(c, req.UserID); err != nil {
+			apiresp.GinError(c, err)
+			return
+		}
+		if err := o.importAllUsersAsFriends(c, req.UserID); err != nil {
+			apiresp.GinError(c, err)
+			return
+		}
+	} else {
+		delete(userSet, req.UserID)
+		operatorResp, err := o.adminClient.FindPlatformOperator(c, &admin.FindPlatformOperatorReq{
+			UserIDs: []string{req.UserID},
+		})
+		if err != nil {
+			apiresp.GinError(c, err)
+			return
+		}
+		if len(operatorResp.UserIDs) == 0 {
+			if err := o.removeDefaultFriend(c, req.UserID); err != nil {
+				apiresp.GinError(c, err)
+				return
+			}
+		}
+	}
+
+	nextUserIDs := make([]string, 0, len(userSet))
+	for userID := range userSet {
+		if userID != "" {
+			nextUserIDs = append(nextUserIDs, userID)
+		}
+	}
+	if err := o.setSmartCustomerServiceUserIDs(c, datautil.Distinct(nextUserIDs)); err != nil {
+		apiresp.GinError(c, err)
+		return
+	}
+	apiresp.GinSuccess(c, nil)
+}
+
+func (o *Api) getSmartCustomerServiceUserIDs(ctx context.Context) ([]string, error) {
+	resp, err := o.adminClient.GetClientConfig(ctx, &admin.GetClientConfigReq{})
+	if err != nil {
+		return nil, err
+	}
+	raw := strings.TrimSpace(resp.Config[smartCustomerServiceConfigKey])
+	if raw == "" {
+		return nil, nil
+	}
+	var userIDs []string
+	if err := json.Unmarshal([]byte(raw), &userIDs); err != nil {
+		return nil, errs.WrapMsg(err, "parse smart customer service config failed")
+	}
+	return datautil.Distinct(userIDs), nil
+}
+
+func (o *Api) setSmartCustomerServiceUserIDs(ctx context.Context, userIDs []string) error {
+	data, err := json.Marshal(datautil.Distinct(userIDs))
+	if err != nil {
+		return errs.Wrap(err)
+	}
+	_, err = o.adminClient.SetClientConfig(ctx, &admin.SetClientConfigReq{
+		Config: map[string]string{
+			smartCustomerServiceConfigKey: string(data),
+		},
+	})
+	return err
+}
+
+func (o *Api) ensureDefaultFriend(ctx context.Context, userID string) error {
+	resp, err := o.adminClient.FindDefaultFriend(ctx, &admin.FindDefaultFriendReq{})
+	if err != nil {
+		return err
+	}
+	if datautil.Contain(userID, resp.UserIDs...) {
+		return nil
+	}
+	_, err = o.adminClient.AddDefaultFriend(ctx, &admin.AddDefaultFriendReq{UserIDs: []string{userID}})
+	return err
+}
+
+func (o *Api) removeDefaultFriend(ctx context.Context, userID string) error {
+	resp, err := o.adminClient.FindDefaultFriend(ctx, &admin.FindDefaultFriendReq{})
+	if err != nil {
+		return err
+	}
+	if !datautil.Contain(userID, resp.UserIDs...) {
+		return nil
+	}
+	_, err = o.adminClient.DelDefaultFriend(ctx, &admin.DelDefaultFriendReq{UserIDs: []string{userID}})
+	return err
+}
+
+func (o *Api) importAllUsersAsFriends(ctx context.Context, userID string) error {
+	pageNumber := int32(1)
+	friendIDs := make([]string, 0, adminUserBatchSize)
+	for {
+		resp, err := o.chatClient.SearchUserFullInfo(ctx, &chat.SearchUserFullInfoReq{
+			Normal: chatconstant.FinDAllUser,
+			Pagination: &sdkws.RequestPagination{
+				PageNumber: pageNumber,
+				ShowNumber: adminUserBatchSize,
+			},
+		})
+		if err != nil {
+			return err
+		}
+		if len(resp.Users) == 0 {
+			break
+		}
+		for _, user := range resp.Users {
+			if user.UserID == "" || user.UserID == userID {
+				continue
+			}
+			friendIDs = append(friendIDs, user.UserID)
+		}
+		if int32(len(resp.Users)) < adminUserBatchSize {
+			break
+		}
+		pageNumber++
+	}
+	if len(friendIDs) == 0 {
+		return nil
+	}
+	imToken, err := o.imApiCaller.ImAdminTokenWithDefaultAdmin(ctx)
+	if err != nil {
+		return err
+	}
+	return o.imApiCaller.ImportFriend(mctx.WithApiToken(ctx, imToken), userID, datautil.Distinct(friendIDs))
 }
 
 func (o *Api) AddDefaultGroup(c *gin.Context) {
@@ -526,7 +798,7 @@ func (o *Api) registerChatUser(ctx context.Context, ip string, users []*chat.Reg
 		return errs.ErrArgs.WrapMsg("users is empty")
 	}
 	for _, info := range users {
-		respRegisterUser, err := o.chatClient.RegisterUser(ctx, &chat.RegisterUserReq{Ip: ip, User: info, Platform: constant.AdminPlatformID})
+		respRegisterUser, err := o.chatClient.RegisterUser(ctx, &chat.RegisterUserReq{Ip: ip, User: info, Platform: constant.WebPlatformID})
 		if err != nil {
 			return err
 		}

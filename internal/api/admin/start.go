@@ -179,6 +179,15 @@ func SetAdminRoute(router gin.IRouter, admin *Api, mw *chatmw.MW, cfg *Config, c
 	blockRouter.POST("/del", admin.UnblockUser)        // Unblock user
 	blockRouter.POST("/search", admin.SearchBlockUser) // Search blocked users
 
+	operatorRouter := router.Group("/operator", mw.CheckAdmin)
+	operatorRouter.POST("/find", admin.FindPlatformOperator)
+	operatorRouter.POST("/set", admin.SetPlatformOperator)
+	operatorRouter.POST("/user/search", admin.SearchPlatformOperatorUsers)
+
+	customerServiceRouter := router.Group("/customer_service", mw.CheckAdmin)
+	customerServiceRouter.POST("/find", admin.FindSmartCustomerService)
+	customerServiceRouter.POST("/set", admin.SetSmartCustomerService)
+
 	userRouter := router.Group("/user", mw.CheckAdmin)
 	userRouter.POST("/password/reset", admin.ResetUserPassword) // Reset user password
 
