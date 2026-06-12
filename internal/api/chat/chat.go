@@ -356,7 +356,18 @@ func (o *Api) OpenIMCallback(c *gin.Context) {
 		apiresp.GinError(c, err)
 		return
 	}
-	if c.Query(constantpb.CallbackCommand) == openIMCallbackAfterSendSingleMsg {
+	command := c.Query(constantpb.CallbackCommand)
+	if command == "" {
+		command = c.Param("command")
+	}
+	log.ZWarn(c, "openim callback reached", nil,
+		"command", command,
+		"pathCommand", c.Param("command"),
+		"queryCommand", c.Query(constantpb.CallbackCommand),
+		"keyEmpty", c.Query(botstruct.Key) == "",
+		"body", string(body),
+	)
+	if command == openIMCallbackAfterSendSingleMsg {
 		handled, err := o.handleSmartCustomerServiceSingleMsg(c, string(body), c.Query(botstruct.Key))
 		if err != nil {
 			apiresp.GinError(c, err)
@@ -368,7 +379,7 @@ func (o *Api) OpenIMCallback(c *gin.Context) {
 		}
 	}
 	req := &chatpb.OpenIMCallbackReq{
-		Command: c.Query(constantpb.CallbackCommand),
+		Command: command,
 		Body:    string(body),
 	}
 	if _, err := o.chatClient.OpenIMCallback(c, req); err != nil {

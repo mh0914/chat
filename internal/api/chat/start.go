@@ -135,10 +135,10 @@ func SetChatRoute(router gin.IRouter, chat *Api, mw *chatmw.MW) {
 	account.POST("/password/change", mw.CheckToken, chat.ChangePassword) // Change password
 
 	user := router.Group("/user", mw.CheckToken)
-	user.POST("/update", chat.UpdateUserInfo)                 // Edit personal information
-	user.POST("/find/public", chat.FindUserPublicInfo)        // Get user's public information
-	user.POST("/find/full", chat.FindUserFullInfo)            // Get all information of the user
-	user.POST("/operator/find", chat.FindPlatformOperator)    // Get operator flag for user ids
+	user.POST("/update", chat.UpdateUserInfo)              // Edit personal information
+	user.POST("/find/public", chat.FindUserPublicInfo)     // Get user's public information
+	user.POST("/find/full", chat.FindUserFullInfo)         // Get all information of the user
+	user.POST("/operator/find", chat.FindPlatformOperator) // Get operator flag for user ids
 	user.POST("/customer_service/find", chat.FindSmartCustomerService)
 	user.POST("/search/full", chat.SearchUserFullInfo)        // Search user's public information
 	user.POST("/search/public", chat.SearchUserPublicInfo)    // Search all information of the user
@@ -154,5 +154,14 @@ func SetChatRoute(router gin.IRouter, chat *Api, mw *chatmw.MW) {
 	applicationGroup.POST("/latest_version", chat.LatestApplicationVersion)
 	applicationGroup.POST("/page_versions", chat.PageApplicationVersion)
 
-	router.Group("/callback").POST("/open_im", chat.OpenIMCallback) // Callback
+	callbackGroup := router.Group("/callback")
+	callbackGroup.POST("/open_im", chat.OpenIMCallback)          // Callback
+	callbackGroup.POST("/open_im/:command", chat.OpenIMCallback) // OpenIM appends callback command to the URL path.
+
+	ssoGroup := router.Group("/sso/oauth2")
+	ssoGroup.GET("/authorize", chat.SSOAuthorize)
+	ssoGroup.GET("/callback", chat.SSOCallback)
+	ssoGroup.POST("/ticket", chat.SSOExchangeTicket)
+	ssoGroup.GET("/logout", chat.SSOLogout)
+	ssoGroup.POST("/logout", chat.SSOLogout)
 }

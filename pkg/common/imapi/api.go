@@ -28,6 +28,7 @@ var (
 	forceOffLine  = NewApiCaller[auth.ForceLogoutReq, auth.ForceLogoutResp]("/auth/force_logout")
 
 	updateUserInfo            = NewApiCaller[user.UpdateUserInfoReq, user.UpdateUserInfoResp]("/user/update_user_info")
+	updateUserInfoEx          = NewApiCaller[user.UpdateUserInfoExReq, user.UpdateUserInfoExResp]("/user/update_user_info_ex")
 	registerUser              = NewApiCaller[user.UserRegisterReq, user.UserRegisterResp]("/user/user_register")
 	getUserInfo               = NewApiCaller[user.GetDesignateUsersReq, user.GetDesignateUsersResp]("/user/get_users_info")
 	accountCheck              = NewApiCaller[user.AccountCheckReq, user.AccountCheckResp]("/user/account_check")

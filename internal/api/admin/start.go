@@ -190,6 +190,7 @@ func SetAdminRoute(router gin.IRouter, admin *Api, mw *chatmw.MW, cfg *Config, c
 
 	userRouter := router.Group("/user", mw.CheckAdmin)
 	userRouter.POST("/password/reset", admin.ResetUserPassword) // Reset user password
+	userRouter.POST("/delete", admin.DeleteUserAccount)         // Delete user account
 
 	initGroup := router.Group("/client_config", mw.CheckAdmin)
 	initGroup.POST("/get", admin.GetClientConfig) // Get client initialization configuration

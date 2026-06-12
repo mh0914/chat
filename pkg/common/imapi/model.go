@@ -7,6 +7,7 @@ type SendSingleMsgReq struct {
 	// groupMsg should appoint sendID
 	SendID          string                 `json:"sendID"`
 	Content         string                 `json:"content" binding:"required"`
+	ContentType     int32                  `json:"contentType"`
 	OfflinePushInfo *sdkws.OfflinePushInfo `json:"offlinePushInfo"`
 	Ex              string                 `json:"ex"`
 }

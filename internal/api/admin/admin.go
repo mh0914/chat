@@ -3,8 +3,8 @@ package admin
 import (
 	"context"
 	"crypto/md5"
-	"encoding/json"
 	"encoding/hex"
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
@@ -49,6 +49,10 @@ type findSmartCustomerServiceReq struct {
 
 type findSmartCustomerServiceResp struct {
 	UserIDs []string `json:"userIDs"`
+}
+
+type deleteUserAccountReq struct {
+	UserID string `json:"userID"`
 }
 
 func New(chatClient chat.ChatClient, adminClient admin.AdminClient, imApiCaller imapi.CallerInterface, api *util.Api) *Api {
@@ -123,6 +127,51 @@ func (o *Api) ResetUserPassword(c *gin.Context) {
 	}
 
 	apiresp.GinSuccess(c, resp)
+}
+
+func (o *Api) DeleteUserAccount(c *gin.Context) {
+	req, err := a2r.ParseRequest[deleteUserAccountReq](c)
+	if err != nil {
+		apiresp.GinError(c, err)
+		return
+	}
+	req.UserID = strings.TrimSpace(req.UserID)
+	if req.UserID == "" {
+		apiresp.GinError(c, errs.ErrArgs.WrapMsg("userID is empty"))
+		return
+	}
+	if req.UserID == o.ChatAdminUserID || req.UserID == o.GetDefaultIMAdminUserID() {
+		apiresp.GinError(c, errs.ErrNoPermission.WrapMsg("built-in admin account cannot be deleted"))
+		return
+	}
+
+	ctx := o.WithAdminUser(c)
+	if _, err = o.chatClient.DelUserAccount(ctx, &chat.DelUserAccountReq{UserIDs: []string{req.UserID}}); err != nil {
+		apiresp.GinError(c, err)
+		return
+	}
+	if _, err = o.adminClient.SetPlatformOperator(ctx, &admin.SetPlatformOperatorReq{
+		UserID:             req.UserID,
+		IsPlatformOperator: false,
+	}); err != nil {
+		apiresp.GinError(c, err)
+		return
+	}
+	if err = o.removeSmartCustomerServiceUserID(ctx, req.UserID); err != nil {
+		apiresp.GinError(c, err)
+		return
+	}
+	if err = o.removeDefaultFriend(ctx, req.UserID); err != nil {
+		apiresp.GinError(c, err)
+		return
+	}
+	if imToken, tokenErr := o.imApiCaller.ImAdminTokenWithDefaultAdmin(c); tokenErr == nil {
+		_ = o.imApiCaller.ForceOffLine(mctx.WithApiToken(c, imToken), req.UserID)
+	} else {
+		log.ZWarn(c, "DeleteUserAccount force offline token failed", tokenErr, "userID", req.UserID)
+	}
+
+	apiresp.GinSuccess(c, nil)
 }
 
 func (o *Api) AdminUpdateInfo(c *gin.Context) {
@@ -370,6 +419,20 @@ func (o *Api) SetSmartCustomerService(c *gin.Context) {
 		return
 	}
 	apiresp.GinSuccess(c, nil)
+}
+
+func (o *Api) removeSmartCustomerServiceUserID(ctx context.Context, userID string) error {
+	userIDs, err := o.getSmartCustomerServiceUserIDs(ctx)
+	if err != nil {
+		return err
+	}
+	nextUserIDs := datautil.Slice(userIDs, func(item string) string {
+		if item == userID {
+			return ""
+		}
+		return item
+	})
+	return o.setSmartCustomerServiceUserIDs(ctx, datautil.Distinct(nextUserIDs))
 }
 
 func (o *Api) getSmartCustomerServiceUserIDs(ctx context.Context) ([]string, error) {

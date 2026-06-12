@@ -13,6 +13,7 @@ import (
 	"github.com/openimsdk/protocol/relation"
 	"github.com/openimsdk/protocol/sdkws"
 	"github.com/openimsdk/protocol/user"
+	"github.com/openimsdk/protocol/wrapperspb"
 	"github.com/openimsdk/tools/errs"
 	"github.com/openimsdk/tools/log"
 )
@@ -26,6 +27,7 @@ type CallerInterface interface {
 	InviteToGroup(ctx context.Context, userID string, groupIDs []string) error
 
 	UpdateUserInfo(ctx context.Context, userID string, nickName string, faceURL string) error
+	UpdateUserInfoEx(ctx context.Context, userID string, nickName string, faceURL string, ex string) error
 	GetUserInfo(ctx context.Context, userID string) (*sdkws.UserInfo, error)
 	GetUsersInfo(ctx context.Context, userIDs []string) ([]*sdkws.UserInfo, error)
 	AddNotificationAccount(ctx context.Context, req *user.AddNotificationAccountReq) error
@@ -139,6 +141,21 @@ func (c *Caller) UpdateUserInfo(ctx context.Context, userID string, nickName str
 		Nickname: nickName,
 		FaceURL:  faceURL,
 	}})
+	return err
+}
+
+func (c *Caller) UpdateUserInfoEx(ctx context.Context, userID string, nickName string, faceURL string, ex string) error {
+	userInfo := &sdkws.UserInfoWithEx{UserID: userID}
+	if nickName != "" {
+		userInfo.Nickname = wrapperspb.String(nickName)
+	}
+	if faceURL != "" {
+		userInfo.FaceURL = wrapperspb.String(faceURL)
+	}
+	if ex != "" {
+		userInfo.Ex = wrapperspb.String(ex)
+	}
+	_, err := updateUserInfoEx.Call(ctx, c.imApi, &user.UpdateUserInfoExReq{UserInfo: userInfo})
 	return err
 }
 
